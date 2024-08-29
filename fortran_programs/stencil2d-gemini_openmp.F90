@@ -86,7 +86,6 @@ program main
 
     end do
 
-
     if ( is_master() ) then
         write(*, '(a)') '] )'
     end if
@@ -112,52 +111,75 @@ contains
         real (kind=wp), intent(in) :: alpha
         integer, intent(in) :: num_iter
         
-        ! local
-        real (kind=wp), save, allocatable :: tmp1_field(:, :, :)
-        real (kind=wp), save, allocatable :: tmp2_field(:, :, :)
         integer :: iter, i, j, k
         
-        ! this is only done the first time this subroutine is called (warmup)
-        ! or when the dimensions of the fields change
-        if ( allocated(tmp1_field) .and. &
-            any( shape(tmp1_field) /= (/nx + 2 * num_halo, ny + 2 * num_halo, nz /) ) ) then
-            deallocate( tmp1_field, tmp2_field )
+        real (kind=wp), save, allocatable :: tmp_field(:, :)
+        real (kind=wp) :: laplap
+        if ( allocated(tmp_field) .and. &
+            any( shape(tmp_field) /= (/nx + 2 * num_halo, ny + 2 * num_halo/) ) ) then
+            deallocate( tmp_field )
         end if
-        if ( .not. allocated(tmp1_field) ) then
-            allocate( tmp1_field(nx + 2 * num_halo, ny + 2 * num_halo, nz) )
-            allocate( tmp2_field(nx + 2 * num_halo, ny + 2 * num_halo, nz) )
-            tmp1_field = 0.0_wp
-            tmp2_field = 0.0_wp
+        if ( .not. allocated(tmp_field) ) then
+            allocate( tmp_field(nx + 2 * num_halo, ny + 2 * num_halo) )
+            tmp_field = 0.0_wp
         end if
         
-        do iter = 1, num_iter
-                    
-            call update_halo( in_field )
-            
-            call laplacian( in_field, tmp1_field, num_halo, extend=1 )
-            call laplacian( tmp1_field, tmp2_field, num_halo, extend=0 )
-            
-            do k = 1, nz
-              do j = 1 + num_halo, ny + num_halo
-                do i = 1 + num_halo, nx + num_halo
-                  tmp1_field(i, j, k) = -4._wp * in_field(i, j, k) &
-                                      + in_field(i - 1, j, k) + in_field(i + 1, j, k) &
-                                      + in_field(i, j - 1, k) + in_field(i, j + 1, k)
-                  tmp2_field(i, j, k) = -4._wp * tmp1_field(i, j, k) &
-                                      + tmp1_field(i - 1, j, k) + tmp1_field(i + 1, j, k) &
-                                      + tmp1_field(i, j - 1, k) + tmp1_field(i, j + 1, k)
-                  out_field(i, j, k) = in_field(i, j, k) - alpha * tmp2_field(i, j, k)
-                  if (iter /= num_iter) then
-                    in_field(i, j, k) = out_field(i, j, k)
-                  end if
-                end do
-              end do
-            end do
 
+
+do iter = 1, num_iter
+    call update_halo(in_field)
+
+    do k = 1, nz, nk
+        do j = 1 + num_halo, ny + num_halo
+            do i = 1 + num_halo, nx + num_halo
+                tmp_field(i, j) = -4._wp * in_field(i, j, k) &
+                                  + in_field(i - 1, j, k) + in_field(i + 1, j, k) &
+                                  + in_field(i, j - 1, k) + in_field(i, j + 1, k)
+            end do
         end do
 
-        call update_halo( out_field )
-            
+        do j = 1 + num_halo, ny + num_halo
+            do i = 1 + num_halo, nx + num_halo
+                laplap = -4._wp  * tmp_field(i, j) &
+                         + tmp_field(i - 1, j) + tmp_field(i + 1, j) &
+                         + tmp_field(i, j - 1) + tmp_field(i, j + 1)
+                out_field(i, j, k) = in_field(i, j, k) - alpha * laplap
+            end do
+        end do
+
+        do kk = k + 1, min(k + nk - 1, nz)
+            do j = 1 + num_halo, ny + num_halo
+                do i = 1 + num_halo, nx + num_halo
+                    tmp_field(i, j) = -4._wp * in_field(i, j, kk) &
+                                      + in_field(i - 1, j, kk) + in_field(i + 1, j, kk) &
+                                      + in_field(i, j - 1, kk) + in_field(i, j + 1, kk)
+                end do
+            end do
+
+            do j = 1 + num_halo, ny + num_halo
+                do i = 1 + num_halo, nx + num_halo
+                    laplap = -4._wp * tmp_field(i, j) &
+                             + tmp_field(i - 1, j) + tmp_field(i + 1, j) &
+                             + tmp_field(i, j - 1) + tmp_field(i, j + 1)
+                    out_field(i, j, kk) = in_field(i, j, kk) - alpha * laplap
+                end do
+            end do
+        end do
+    end do
+
+    if (iter /= num_iter) then
+        do k = 1, nz
+            do j = 1 + num_halo, ny + num_halo
+                do i = 1 + num_halo, nx + num_halo
+                    in_field(i, j, k) = out_field(i, j, k)
+                end do
+            end do
+        end do
+    end if
+end do
+
+out_field(:,:,:) = in_field(:,:,:)
+
     end subroutine apply_diffusion
 
 

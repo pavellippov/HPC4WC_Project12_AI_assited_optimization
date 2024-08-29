@@ -86,7 +86,6 @@ program main
 
     end do
 
-
     if ( is_master() ) then
         write(*, '(a)') '] )'
     end if
@@ -112,49 +111,37 @@ contains
         real (kind=wp), intent(in) :: alpha
         integer, intent(in) :: num_iter
         
-        ! local
-        real (kind=wp), save, allocatable :: tmp1_field(:, :, :)
-        real (kind=wp), save, allocatable :: tmp2_field(:, :, :)
         integer :: iter, i, j, k
         
-        ! this is only done the first time this subroutine is called (warmup)
-        ! or when the dimensions of the fields change
-        if ( allocated(tmp1_field) .and. &
-            any( shape(tmp1_field) /= (/nx + 2 * num_halo, ny + 2 * num_halo, nz /) ) ) then
-            deallocate( tmp1_field, tmp2_field )
-        end if
-        if ( .not. allocated(tmp1_field) ) then
-            allocate( tmp1_field(nx + 2 * num_halo, ny + 2 * num_halo, nz) )
-            allocate( tmp2_field(nx + 2 * num_halo, ny + 2 * num_halo, nz) )
-            tmp1_field = 0.0_wp
-            tmp2_field = 0.0_wp
-        end if
+
         
         do iter = 1, num_iter
-                    
-            call update_halo( in_field )
-            
-            call laplacian( in_field, tmp1_field, num_halo, extend=1 )
-            call laplacian( tmp1_field, tmp2_field, num_halo, extend=0 )
-            
+    call update_halo(in_field)
+
             do k = 1, nz
-              do j = 1 + num_halo, ny + num_halo
-                do i = 1 + num_halo, nx + num_halo
-                  tmp1_field(i, j, k) = -4._wp * in_field(i, j, k) &
-                                      + in_field(i - 1, j, k) + in_field(i + 1, j, k) &
-                                      + in_field(i, j - 1, k) + in_field(i, j + 1, k)
-                  tmp2_field(i, j, k) = -4._wp * tmp1_field(i, j, k) &
-                                      + tmp1_field(i - 1, j, k) + tmp1_field(i + 1, j, k) &
-                                      + tmp1_field(i, j - 1, k) + tmp1_field(i, j + 1, k)
-                  out_field(i, j, k) = in_field(i, j, k) - alpha * tmp2_field(i, j, k)
-                  if (iter /= num_iter) then
-                    in_field(i, j, k) = out_field(i, j, k)
-                  end if
+                do j = 1 + num_halo, ny + num_halo
+                    do i = 1 + num_halo, nx + num_halo
+                        in_field(i, j, k) = in_field(i, j, k) - alpha * (-4._wp * in_field(i, j, k) &
+                                                                        + in_field(i - 1, j, k) + in_field(i + 1, j, k) &
+                                                                        + in_field(i, j - 1, k) + in_field(i, j + 1, k))
+                    end do
                 end do
-              end do
             end do
 
-        end do
+            ! copy out to in in caes this is not the last iteration
+            if (iter /= num_iter) then
+                do k = 1, nz
+                    do j = 1 + num_halo, ny + num_halo
+                        do i = 1 + num_halo, nx + num_halo
+                            out_field(i, j, k) = in_field(i, j, k)
+                        end do
+                    end do
+                end do
+            end if
+
+end do
+
+call update_halo(out_field)
 
         call update_halo( out_field )
             

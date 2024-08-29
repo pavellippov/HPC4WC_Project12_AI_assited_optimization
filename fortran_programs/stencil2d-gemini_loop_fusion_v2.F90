@@ -137,19 +137,14 @@ contains
             call laplacian( in_field, tmp1_field, num_halo, extend=1 )
             call laplacian( tmp1_field, tmp2_field, num_halo, extend=0 )
             
+            ! do forward in time step
             do k = 1, nz
               do j = 1 + num_halo, ny + num_halo
                 do i = 1 + num_halo, nx + num_halo
-                  tmp1_field(i, j, k) = -4._wp * in_field(i, j, k) &
-                                      + in_field(i - 1, j, k) + in_field(i + 1, j, k) &
-                                      + in_field(i, j - 1, k) + in_field(i, j + 1, k)
-                  tmp2_field(i, j, k) = -4._wp * tmp1_field(i, j, k) &
-                                      + tmp1_field(i - 1, j, k) + tmp1_field(i + 1, j, k) &
-                                      + tmp1_field(i, j - 1, k) + tmp1_field(i, j + 1, k)
                   out_field(i, j, k) = in_field(i, j, k) - alpha * tmp2_field(i, j, k)
                   if (iter /= num_iter) then
                     in_field(i, j, k) = out_field(i, j, k)
-                  end if
+                  endif
                 end do
               end do
             end do

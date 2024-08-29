@@ -137,19 +137,14 @@ contains
             call laplacian( in_field, tmp1_field, num_halo, extend=1 )
             call laplacian( tmp1_field, tmp2_field, num_halo, extend=0 )
             
+            ! do forward in time step
             do k = 1, nz
               do j = 1 + num_halo, ny + num_halo
                 do i = 1 + num_halo, nx + num_halo
-                  tmp1_field(i, j, k) = -4._wp * in_field(i, j, k) &
-                                      + in_field(i - 1, j, k) + in_field(i + 1, j, k) &
-                                      + in_field(i, j - 1, k) + in_field(i, j + 1, k)
-                  tmp2_field(i, j, k) = -4._wp * tmp1_field(i, j, k) &
-                                      + tmp1_field(i - 1, j, k) + tmp1_field(i + 1, j, k) &
-                                      + tmp1_field(i, j - 1, k) + tmp1_field(i, j + 1, k)
                   out_field(i, j, k) = in_field(i, j, k) - alpha * tmp2_field(i, j, k)
                   if (iter /= num_iter) then
                     in_field(i, j, k) = out_field(i, j, k)
-                  end if
+                  endif
                 end do
               end do
             end do
@@ -168,9 +163,9 @@ contains
     !  num_halo          -- number of halo points
     !  extend            -- extend computation into halo-zone by this number of points
     !
-    subroutine laplacian( field, lap, num_halo, extend )
-        implicit none
-            
+    
+    subroutine laplacian(field, lap, num_halo, extend)
+      implicit none
         ! argument
         real (kind=wp), intent(in) :: field(:, :, :)
         real (kind=wp), intent(inout) :: lap(:, :, :)
@@ -179,17 +174,25 @@ contains
         ! local
         integer :: i, j, k
             
-        do k = 1, nz
-        do j = 1 + num_halo - extend, ny + num_halo + extend
-        do i = 1 + num_halo - extend, nx + num_halo + extend
-            lap(i, j, k) = -4._wp * field(i, j, k)      &
-                + field(i - 1, j, k) + field(i + 1, j, k)  &
-                + field(i, j - 1, k) + field(i, j + 1, k)
-        end do
-        end do
-        end do
 
-    end subroutine laplacian
+      do k = 1, nz
+        do j = 1 + num_halo - extend, ny + num_halo + extend
+          do i = 1 + num_halo - extend, nx + num_halo + extend, 4
+            lap(i, j, k) = -4._wp * field(i, j, k) + field(i - 1, j, k) + field(i + 1, j, k) + field(i, j - 1, k) + field(i, j + 1, k)
+            lap(i + 1, j, k) = -4._wp * field(i + 1, j, k) + field(i, j, k) + field(i + 2, j, k) + field(i + 1, j - 1, k) + field(i + 1, j + 1, k)
+            lap(i + 2, j, k) = -4._wp * field(i + 2, j, k) + field(i + 1, j, k) + field(i + 3, j, k) + field(i + 2, j - 1, k) + field(i + 2, j + 1, k)
+            lap(i + 3, j, k) = -4._wp * field(i + 3, j, k) + field(i + 2, j, k) + field(i + 4, j, k) + field(i + 3, j - 1, k) + field(i + 3, j + 1, k)
+          end do
+
+          ! Handle the remaining elements
+          do i = nx + num_halo + extend - 3, nx + num_halo + extend
+            lap(i, j, k) = -4._wp * field(i, j, k) + field(i - 1, j, k) + field(i + 1, j, k) + field(i, j - 1, k) + field(i, j + 1, k)
+          end do
+        end do
+      end do
+end subroutine laplacian
+    
+    
 
 
     ! Update the halo-zone using an up/down and left/right strategy.
