@@ -125,47 +125,49 @@ contains
         end if
         
 
- do iter = 1, num_iter
-    call update_halo(in_field)
+    !$OMP TARGET teams distribute
+    do iter = 1, num_iter
+      call update_halo(in_field)
 
-    !$OMP PARALLEL DO PRIVATE(tmp_field, laplap) SCHEDULE(STATIC)
-    do k = 1, nz
-      do j = 1 + num_halo, ny + num_halo
-        do i = 1 + num_halo, nx + num_halo
-          tmp_field(i, j) = -4._wp * in_field(i, j, k) &
-                           + in_field(i - 1, j, k) + in_field(i + 1, j, k) &
-                           + in_field(i, j - 1, k) + in_field(i, j + 1, k)
-        end do
-      end do
-
-      do j = 1 + num_halo, ny + num_halo
-        do i = 1 + num_halo, nx + num_halo
-          laplap = -4._wp  * tmp_field(i, j) &
-                  + tmp_field(i - 1, j) + tmp_field(i + 1, j) &
-                  + tmp_field(i, j - 1) + tmp_field(i, j + 1)
-          out_field(i, j, k) = in_field(i, j, k) - alpha * laplap
-        end do
-      end do
-    end do
-    !$OMP END PARALLEL DO
-
-    if (iter /= num_iter) then
-      !$OMP PARALLEL DO
+      !$OMP parallel do
       do k = 1, nz
         do j = 1 + num_halo, ny + num_halo
           do i = 1 + num_halo, nx + num_halo
-            in_field(i, j, k) = out_field(i, j, k)
+            tmp_field(i, j) = -4._wp * in_field(i, j, k) &
+                             + in_field(i - 1, j, k) + in_field(i + 1, j, k) &
+                             + in_field(i, j - 1, k) + in_field(i, j + 1, k)
+          end do
+        end do
+
+        do j = 1 + num_halo, ny + num_halo
+          do i = 1 + num_halo, nx + num_halo
+            laplap = -4._wp * tmp_field(i, j) &
+                    + tmp_field(i - 1, j) + tmp_field(i + 1, j) &
+                    + tmp_field(i, j - 1) + tmp_field(i, j + 1)
+            out_field(i, j, k) = in_field(i, j, k) - alpha * laplap
           end do
         end do
       end do
-      !$OMP END PARALLEL DO
-    end if
-  end do
+      !$OMP end parallel do
 
-  out_field(:,:,:) = in_field(:,:,:)
+      if (iter /= num_iter) then
+        !$OMP parallel do
+        do k = 1, nz
+          do j = 1 + num_halo, ny + num_halo
+            do i = 1 + num_halo, nx + num_halo
+              in_field(i, j, k) = out_field(i, j, k)
+            end do
+          end do
+        end do
+        !$OMP end parallel do
+      end if
+    end do
+    
+    !$OMP END TARGET
 
-end subroutine apply_diffusion
+    out_field(:,:,:) = in_field(:,:,:)
 
+    end subroutine apply_diffusion
 
 
     ! Compute Laplacian using 2nd-order centered differences.
@@ -205,7 +207,6 @@ end subroutine apply_diffusion
     !
     !  Note: corners are updated in the left/right phase of the halo-update
     !
-    
     subroutine update_halo( field )
         implicit none
             
@@ -252,7 +253,7 @@ end subroutine apply_diffusion
         end do
         
     end subroutine update_halo
-
+        
 
     ! initialize at program start
     ! (init MPI, read command line arguments)

@@ -206,53 +206,40 @@ end subroutine apply_diffusion
     !  Note: corners are updated in the left/right phase of the halo-update
     !
     
-    subroutine update_halo( field )
-        implicit none
-            
-        ! argument
-        real (kind=wp), intent(inout) :: field(:, :, :)
-        
-        ! local
-        integer :: i, j, k
-            
-        ! bottom edge (without corners)
-        do k = 1, nz
-        do j = 1, num_halo
-        do i = 1 + num_halo, nx + num_halo
-            field(i, j, k) = field(i, j + ny, k)
-        end do
-        end do
-        end do
-            
-        ! top edge (without corners)
-        do k = 1, nz
-        do j = ny + num_halo + 1, ny + 2 * num_halo
-        do i = 1 + num_halo, nx + num_halo
-            field(i, j, k) = field(i, j - ny, k)
-        end do
-        end do
-        end do
-        
-        ! left edge (including corners)
-        do k = 1, nz
-        do j = 1, ny + 2 * num_halo
-        do i = 1, num_halo
-            field(i, j, k) = field(i + nx, j, k)
-        end do
-        end do
-        end do
-                
-        ! right edge (including corners)
-        do k = 1, nz
-        do j = 1, ny + 2 * num_halo
-        do i = nx + num_halo + 1, nx + 2 * num_halo
-            field(i, j, k) = field(i - nx, j, k)
-        end do
-        end do
-        end do
-        
-    end subroutine update_halo
+    subroutine update_halo(field)
+      implicit none
 
+      real(kind=wp), intent(inout) :: field(:, :, :)
+      integer :: i, j, k, nx, ny, nz, num_halo
+
+      ! Get dimensions from the array
+      nx = size(field, 1) - 2 * num_halo
+      ny = size(field, 2) - 2 * num_halo
+      nz = size(field, 3)
+
+      !$OMP PARALLEL DO SCHEDULE(STATIC)
+      do k = 1, nz
+        do j = 1, num_halo
+          do i = 1 + num_halo, nx + num_halo
+            field(i, j, k) = field(i, j + ny, k)
+          end do
+        end do
+        do j = ny + num_halo + 1, ny + 2 * num_halo
+          do i = 1 + num_halo, nx + num_halo
+            field(i, j, k) = field(i, j - ny, k)
+          end do
+        end do
+        do j = 1, ny + 2 * num_halo
+          do i = 1, num_halo
+            field(i, j, k) = field(i + nx, j, k)
+          end do
+          do i = nx + num_halo + 1, nx + 2 * num_halo
+            field(i, j, k) = field(i - nx, j, k)
+          end do
+        end do
+      end do
+      !$OMP END PARALLEL DO
+    end subroutine update_halo
 
     ! initialize at program start
     ! (init MPI, read command line arguments)
