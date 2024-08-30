@@ -115,50 +115,47 @@ contains
         real (kind=wp), save, allocatable :: tmp1_field(:, :, :)
         real (kind=wp), save, allocatable :: tmp2_field(:, :, :)
         integer :: iter, i, j, k
+        integer, parameter :: extend_1 = 1, extend_0 = 0
 
         ! Allocate tmp1_field and tmp2_field if necessary
-        if (allocated(tmp1_field) .and. &
-            any(shape(tmp1_field) /= (/nx + 2 * num_halo, ny + 2 * num_halo, nz/))) then
-            deallocate(tmp1_field, tmp2_field)
+        if ( allocated(tmp1_field) .and. &
+            any( shape(tmp1_field) /= (/nx + 2 * num_halo, ny + 2 * num_halo, nz/) ) ) then
+            deallocate( tmp1_field, tmp2_field )
         end if
-        if (.not. allocated(tmp1_field)) then
-            allocate(tmp1_field(nx + 2 * num_halo, ny + 2 * num_halo, nz))
-            allocate(tmp2_field(nx + 2 * num_halo, ny + 2 * num_halo, nz))
+        if ( .not. allocated(tmp1_field) ) then
+            allocate( tmp1_field(nx + 2 * num_halo, ny + 2 * num_halo, nz) )
+            allocate( tmp2_field(nx + 2 * num_halo, ny + 2 * num_halo, nz) )
             tmp1_field = 0.0_wp
             tmp2_field = 0.0_wp
         end if
 
         do iter = 1, num_iter
 
-            call update_halo(in_field)
+            call update_halo( in_field )
 
-            ! Apply parallelism with OpenMP
-            !$omp parallel do private(i, j, k) collapse(3)
+            ! Inline laplacian( in_field, tmp1_field, num_halo, extend=1 )
             do k = 1, nz
-            do j = 1 + num_halo - 1, ny + num_halo + 1
-            do i = 1 + num_halo - 1, nx + num_halo + 1
+            do j = 1 + num_halo - extend_1, ny + num_halo + extend_1
+            do i = 1 + num_halo - extend_1, nx + num_halo + extend_1
                 tmp1_field(i, j, k) = -4._wp * in_field(i, j, k)      &
                     + in_field(i - 1, j, k) + in_field(i + 1, j, k)  &
                     + in_field(i, j - 1, k) + in_field(i, j + 1, k)
             end do
             end do
             end do
-            !$omp end parallel do
 
-            !$omp parallel do private(i, j, k) collapse(3)
+            ! Inline laplacian( tmp1_field, tmp2_field, num_halo, extend=0 )
             do k = 1, nz
-            do j = 1 + num_halo, ny + num_halo
-            do i = 1 + num_halo, nx + num_halo
+            do j = 1 + num_halo - extend_0, ny + num_halo + extend_0
+            do i = 1 + num_halo - extend_0, nx + num_halo + extend_0
                 tmp2_field(i, j, k) = -4._wp * tmp1_field(i, j, k)    &
                     + tmp1_field(i - 1, j, k) + tmp1_field(i + 1, j, k) &
                     + tmp1_field(i, j - 1, k) + tmp1_field(i, j + 1, k)
             end do
             end do
             end do
-            !$omp end parallel do
 
             ! Do forward in time step
-            !$omp parallel do private(i, j, k) collapse(3)
             do k = 1, nz
             do j = 1 + num_halo, ny + num_halo
             do i = 1 + num_halo, nx + num_halo
@@ -166,11 +163,9 @@ contains
             end do
             end do
             end do
-            !$omp end parallel do
 
             ! Copy out to in if this is not the last iteration
-            if (iter /= num_iter) then
-                !$omp parallel do private(i, j, k) collapse(3)
+            if ( iter /= num_iter ) then
                 do k = 1, nz
                 do j = 1 + num_halo, ny + num_halo
                 do i = 1 + num_halo, nx + num_halo
@@ -178,12 +173,11 @@ contains
                 end do
                 end do
                 end do
-                !$omp end parallel do
             end if
 
         end do
 
-        call update_halo(out_field)
+        call update_halo( out_field )
 
     end subroutine apply_diffusion
 
