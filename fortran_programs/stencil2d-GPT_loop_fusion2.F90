@@ -125,8 +125,8 @@ contains
 
             ! Compute the first Laplacian
             do k = 1, nz
-            do j = 1 + num_halo, ny + num_halo
-            do i = 1 + num_halo, nx + num_halo
+            do j = 1 + num_halo - 1, ny + num_halo + 1
+            do i = 1 + num_halo - 1, nx + num_halo + 1
                 tmp1_field(i, j, k) = -4._wp * in_field(i, j, k) &
                     + in_field(i - 1, j, k) + in_field(i + 1, j, k) &
                     + in_field(i, j - 1, k) + in_field(i, j + 1, k)

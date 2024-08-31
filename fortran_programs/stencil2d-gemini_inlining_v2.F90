@@ -74,6 +74,7 @@ program main
         call PAT_record( PAT_STATE_OFF, istat )
 #endif
 
+        call update_halo( out_field )
         if ( .not. scan .and. is_master() ) &
             call write_field_to_file( out_field, num_halo, "out_field.dat" )
 
@@ -129,8 +130,8 @@ contains
         call update_halo(in_field)
 
         do k = 1, nz
-            do j = 1 + num_halo, ny + num_halo
-                do i = 1 + num_halo, nx + num_halo
+            do j = 1 + num_halo - 1, ny + num_halo + 1
+                do i = 1 + num_halo - 1, nx + num_halo + 1
                     tmp_field(i, j) = -4._wp * in_field(i, j, k) &
                                     + in_field(i - 1, j, k) + in_field(i + 1, j, k) &
                                     + in_field(i, j - 1, k) + in_field(i, j + 1, k)
@@ -142,57 +143,22 @@ contains
                     laplap = -4._wp * tmp_field(i, j) &
                             + tmp_field(i - 1, j) + tmp_field(i + 1, j) &
                             + tmp_field(i, j - 1) + tmp_field(i, j + 1)
-                    out_field(i, j, k) = in_field(i, j, k) - alpha * laplap
+                    if ( iter == num_iter ) then
+                        out_field(i, j, k) = in_field(i, j, k) - alpha * laplap
+                    else
+                        in_field(i, j, k)  = in_field(i, j, k) - alpha * laplap
+                    end if
+
                 end do
             end do
         end do
 
-        if (iter /= num_iter) then
-            do k = 1, nz
-                do j = 1 + num_halo, ny + num_halo
-                    do i = 1 + num_halo, nx + num_halo
-                        in_field(i, j, k) = out_field(i, j, k)
-                    end do
-                end do
-            end do
-        end if
 
     end do
         
-        out_field(:,:,:) = in_field(:,:,:)
 
     end subroutine apply_diffusion
 
-
-    ! Compute Laplacian using 2nd-order centered differences.
-    !     
-    !  in_field          -- input field (nx x ny x nz with halo in x- and y-direction)
-    !  lap_field         -- result (must be same size as in_field)
-    !  num_halo          -- number of halo points
-    !  extend            -- extend computation into halo-zone by this number of points
-    !
-    subroutine laplacian( field, lap, num_halo, extend )
-        implicit none
-            
-        ! argument
-        real (kind=wp), intent(in) :: field(:, :, :)
-        real (kind=wp), intent(inout) :: lap(:, :, :)
-        integer, intent(in) :: num_halo, extend
-        
-        ! local
-        integer :: i, j, k
-            
-        do k = 1, nz
-        do j = 1 + num_halo - extend, ny + num_halo + extend
-        do i = 1 + num_halo - extend, nx + num_halo + extend
-            lap(i, j, k) = -4._wp * field(i, j, k)      &
-                + field(i - 1, j, k) + field(i + 1, j, k)  &
-                + field(i, j - 1, k) + field(i, j + 1, k)
-        end do
-        end do
-        end do
-
-    end subroutine laplacian
 
 
     ! Update the halo-zone using an up/down and left/right strategy.

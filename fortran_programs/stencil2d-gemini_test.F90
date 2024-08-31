@@ -74,7 +74,6 @@ program main
         call PAT_record( PAT_STATE_OFF, istat )
 #endif
 
-        call update_halo( out_field )
         if ( .not. scan .and. is_master() ) &
             call write_field_to_file( out_field, num_halo, "out_field.dat" )
 
@@ -126,39 +125,66 @@ contains
         end if
         
 
- do iter = 1, num_iter
-    call update_halo(in_field)
+    do iter = 1, num_iter
+        call update_halo(in_field)
 
-    !$OMP PARALLEL DO PRIVATE(tmp_field, laplap) SCHEDULE(STATIC)
-    do k = 1, nz
-        do j = 1 + num_halo - 1, ny + num_halo + 1
-            do i = 1 + num_halo - 1, nx + num_halo + 1
-                tmp_field(i, j) = -4._wp * in_field(i, j, k) &
-                                + in_field(i - 1, j, k) + in_field(i + 1, j, k) &
-                                + in_field(i, j - 1, k) + in_field(i, j + 1, k)
+        do k = 1, nz
+            do j = 1 + num_halo - 1, ny + num_halo + 1
+                do i = 1 + num_halo - 1, nx + num_halo + 1
+                    tmp_field(i, j) = -4._wp * in_field(i, j, k) &
+                                    + in_field(i - 1, j, k) + in_field(i + 1, j, k) &
+                                    + in_field(i, j - 1, k) + in_field(i, j + 1, k)
+                end do
             end do
-        end do
 
-        do j = 1 + num_halo, ny + num_halo
-            do i = 1 + num_halo, nx + num_halo
-                laplap = -4._wp * tmp_field(i, j) &
-                        + tmp_field(i - 1, j) + tmp_field(i + 1, j) &
-                        + tmp_field(i, j - 1) + tmp_field(i, j + 1)
-                if ( iter == num_iter ) then
+            do j = 1 + num_halo, ny + num_halo
+                do i = 1 + num_halo, nx + num_halo
+                    laplap = -4._wp * tmp_field(i, j) &
+                            + tmp_field(i - 1, j) + tmp_field(i + 1, j) &
+                            + tmp_field(i, j - 1) + tmp_field(i, j + 1)
                     out_field(i, j, k) = in_field(i, j, k) - alpha * laplap
-                else
-                    in_field(i, j, k)  = in_field(i, j, k) - alpha * laplap
-                end if
-
+                    if (iter /= num_iter) then
+                        in_field(i, j, k) = out_field(i, j, k)
+                end do
             end do
         end do
+
+
     end do
-    !$OMP END PARALLEL DO
+        
+
+    end subroutine apply_diffusion
 
 
-  end do
-end subroutine apply_diffusion
+    ! Compute Laplacian using 2nd-order centered differences.
+    !     
+    !  in_field          -- input field (nx x ny x nz with halo in x- and y-direction)
+    !  lap_field         -- result (must be same size as in_field)
+    !  num_halo          -- number of halo points
+    !  extend            -- extend computation into halo-zone by this number of points
+    !
+    subroutine laplacian( field, lap, num_halo, extend )
+        implicit none
+            
+        ! argument
+        real (kind=wp), intent(in) :: field(:, :, :)
+        real (kind=wp), intent(inout) :: lap(:, :, :)
+        integer, intent(in) :: num_halo, extend
+        
+        ! local
+        integer :: i, j, k
+            
+        do k = 1, nz
+        do j = 1 + num_halo - extend, ny + num_halo + extend
+        do i = 1 + num_halo - extend, nx + num_halo + extend
+            lap(i, j, k) = -4._wp * field(i, j, k)      &
+                + field(i - 1, j, k) + field(i + 1, j, k)  &
+                + field(i, j - 1, k) + field(i, j + 1, k)
+        end do
+        end do
+        end do
 
+    end subroutine laplacian
 
 
     ! Update the halo-zone using an up/down and left/right strategy.
@@ -167,7 +193,6 @@ end subroutine apply_diffusion
     !
     !  Note: corners are updated in the left/right phase of the halo-update
     !
-    
     subroutine update_halo( field )
         implicit none
             
@@ -214,7 +239,7 @@ end subroutine apply_diffusion
         end do
         
     end subroutine update_halo
-
+        
 
     ! initialize at program start
     ! (init MPI, read command line arguments)
