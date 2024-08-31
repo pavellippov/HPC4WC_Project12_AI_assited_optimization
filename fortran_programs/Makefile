@@ -21,7 +21,7 @@ endif
 endif
 ifeq "$(HOSTNAME)" "nid"
   F90 = ftn
-  FFLAGS = -O3 -hfp3 -eZ -ffree -N255 -ec -eC -eI -eF -rm -h omp
+  FFLAGS = -O3 -hfp3 -eZ -ffree -N255 -ec -eC -eI -eF -rm -h omp -h acc
 ifdef NOOPT
   FFLAGS = -O0 -hfp0 -Oipa0 -Ovector0 -ffree -N255 -ec -eC -eI -eF -rm -h omp
   TARGET = stencil2d-$(VERSION)-noopt.x
